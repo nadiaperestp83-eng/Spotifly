@@ -26,6 +26,7 @@ import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart' show logger;
+import 'package:permission_handler/permission_handler.dart';
 
 // Cache durations for different types of data
 const Duration songCacheDuration = Duration(hours: 1, minutes: 30);
@@ -213,9 +214,23 @@ Future<Box> _openBox(String category) async {
   }
 }
 
+Future<bool> _requestStoragePermissions() async {
+  final status = await Permission.storage.request();
+  return status.isGranted || status.isDenied;
+}
+
 Future<({String message, bool success})> backupData(
   BuildContext context,
 ) async {
+  // Request storage permissions before proceeding
+  final permissionStatus = await _requestStoragePermissions();
+  if (!permissionStatus) {
+    return (
+      message: '${context.l10n!.backupError}: Storage permission denied',
+      success: false,
+    );
+  }
+
   final boxNames = ['user', 'settings'];
   final dlPath = await FilePicker.getDirectoryPath();
 
