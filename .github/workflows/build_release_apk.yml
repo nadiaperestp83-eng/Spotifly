@@ -43,7 +43,8 @@ jobs:
           keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: flutter build apk --release --flavor github --no-tree-shake-icons
+
 
       # Tag única por build (versão do pubspec + número do run), pra nunca
       # colidir com uma release já existente em pushes repetidos.
