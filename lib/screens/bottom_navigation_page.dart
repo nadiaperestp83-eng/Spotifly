@@ -19,6 +19,14 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+// lib/screens/bottom_navigation_page.dart
+//
+// Navbar redesenhada como PILULA FLUTUANTE (cantos totalmente arredondados,
+// margens laterais/inferiores, sombra suave), com o MiniPlayer flutuando
+// logo acima dela sem cortar nem sobrepor. NENHUMA logica de navegacao,
+// offline mode, PopScope ou branch switching foi alterada - so a arvore
+// de widgets do bottomNavigationBar e o posicionamento no Stack.
+
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -28,6 +36,7 @@ import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/settings_manager.dart';
+import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_bottom_sheet.dart'
     show closeCurrentBottomSheet;
 import 'package:musify/widgets/mini_player.dart';
@@ -50,6 +59,12 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
 
   /// Track the previously selected tab index to detect double-taps on the same tab.
   int? _previousTabIndex;
+
+  // Medidas da pilula flutuante.
+  static const double _pillHeight = 64;
+  static const double _pillHorizontalMargin = 16;
+  static const double _pillBottomMargin = 12;
+  static const double _miniPlayerGap = 10;
 
   @override
   Widget build(BuildContext context) {
@@ -80,13 +95,17 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
             builder: (context, constraints) {
               final isLargeScreen = MediaQuery.of(context).size.width >= 600;
               final items = _getNavigationItems(isOfflineMode);
+              final currentIndex = _getCurrentIndex(items, isOfflineMode);
 
               return Scaffold(
+                backgroundColor: AppColors.background,
+                extendBody: true,
                 body: SafeArea(
                   child: Row(
                     children: [
                       if (isLargeScreen)
                         NavigationRail(
+                          backgroundColor: AppColors.surface,
                           labelType: NavigationRailLabelType.selected,
                           destinations: items
                               .map(
@@ -97,7 +116,7 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
                                 ),
                               )
                               .toList(),
-                          selectedIndex: _getCurrentIndex(items, isOfflineMode),
+                          selectedIndex: currentIndex,
                           onDestinationSelected: (index) =>
                               _onTabTapped(index, items),
                         ),
@@ -108,10 +127,22 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
                           builder: (context, snapshot) {
                             final mediaQuery = MediaQuery.of(context);
                             final isMiniPlayerVisible = snapshot.data ?? false;
-                            final bottomPadding = !isMiniPlayerVisible
-                                ? mediaQuery.padding.bottom
-                                : mediaQuery.padding.bottom +
-                                      miniPlayerTotalHeight;
+
+                            // Altura reservada pela pilula (so existe em telas
+                            // pequenas - em telas largas a navegacao e o rail).
+                            final pillReservedHeight = isLargeScreen
+                                ? 0.0
+                                : _pillHeight + _pillBottomMargin;
+
+                            final miniPlayerReservedHeight =
+                                isMiniPlayerVisible
+                                ? MiniPlayer.playerHeight + _miniPlayerGap
+                                : 0.0;
+
+                            final bottomPadding =
+                                mediaQuery.padding.bottom +
+                                pillReservedHeight +
+                                miniPlayerReservedHeight;
 
                             return Stack(
                               alignment: Alignment.bottomCenter,
@@ -124,13 +155,35 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
                                   ),
                                   child: widget.child,
                                 ),
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 8,
+
+                                // Mini player flutuando acima da pilula.
+                                if (isMiniPlayerVisible)
+                                  Positioned(
+                                    left: _pillHorizontalMargin,
+                                    right: _pillHorizontalMargin,
+                                    bottom:
+                                        mediaQuery.padding.bottom +
+                                        pillReservedHeight +
+                                        _miniPlayerGap,
+                                    child: const MiniPlayer(),
                                   ),
-                                  child: MiniPlayer(),
-                                ),
+
+                                // Navbar em pilula flutuante (so em telas
+                                // pequenas - telas largas usam NavigationRail).
+                                if (!isLargeScreen)
+                                  Positioned(
+                                    left: _pillHorizontalMargin,
+                                    right: _pillHorizontalMargin,
+                                    bottom:
+                                        mediaQuery.padding.bottom +
+                                        _pillBottomMargin,
+                                    child: _FloatingPillNavBar(
+                                      items: items,
+                                      selectedIndex: currentIndex,
+                                      onTap: (index) =>
+                                          _onTabTapped(index, items),
+                                    ),
+                                  ),
                               ],
                             );
                           },
@@ -139,26 +192,6 @@ class _BottomNavigationPageState extends State<BottomNavigationPage> {
                     ],
                   ),
                 ),
-                bottomNavigationBar: !isLargeScreen
-                    ? NavigationBar(
-                        selectedIndex: _getCurrentIndex(items, isOfflineMode),
-                        labelBehavior: languageSetting == const Locale('en', '')
-                            ? NavigationDestinationLabelBehavior
-                                  .onlyShowSelected
-                            : NavigationDestinationLabelBehavior.alwaysHide,
-                        onDestinationSelected: (index) =>
-                            _onTabTapped(index, items),
-                        destinations: items
-                            .map(
-                              (item) => NavigationDestination(
-                                icon: Icon(item.icon),
-                                selectedIcon: Icon(item.selectedIcon),
-                                label: item.label,
-                              ),
-                            )
-                            .toList(),
-                      )
-                    : null,
               );
             },
           );
@@ -277,4 +310,73 @@ class _NavigationItem {
   final String label;
   final String route;
   final int shellIndex;
+}
+
+/// Bottom nav em formato de pilula flutuante - fundo branco, cantos
+/// totalmente arredondados, sombra suave, icone vermelho + rotulo vermelho
+/// no item ativo, cinza nos inativos.
+class _FloatingPillNavBar extends StatelessWidget {
+  const _FloatingPillNavBar({
+    required this.items,
+    required this.selectedIndex,
+    required this.onTap,
+  });
+
+  final List<_NavigationItem> items;
+  final int selectedIndex;
+  final ValueChanged<int> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: _BottomNavigationPageState._pillHeight,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadii.chip),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Row(
+          children: List.generate(items.length, (index) {
+            final item = items[index];
+            final selected = index == selectedIndex;
+            final color = selected ? AppColors.accent : AppColors.iconInactive;
+
+            return Expanded(
+              child: InkWell(
+                borderRadius: BorderRadius.circular(AppRadii.chip),
+                onTap: () => onTap(index),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      selected ? item.selectedIcon : item.icon,
+                      color: color,
+                      size: 24,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      item.label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                        color: color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ),
+      ),
+    );
+  }
 }
