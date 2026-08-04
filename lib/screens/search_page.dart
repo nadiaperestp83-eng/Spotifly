@@ -238,9 +238,11 @@ class _SearchPageState extends State<SearchPage> {
                         loadingProgressNotifier: _fetchingSongs,
                         controller: _searchBar,
                         focusNode: _inputNode,
-                        labelText:
-                            context.l10n?.searchPlaceholder ??
-                            'Songs, Playlist, Album or Artist',
+                        // Texto fixo (o design pede literalmente esse
+                        // placeholder). Se quiser traduzir depois, adicione
+                        // a chave searchPlaceholder no app_localizations e
+                        // troque por context.l10n!.searchPlaceholder.
+                        labelText: 'Songs, Playlist, Album or Artist',
                         onChanged: (value) {
                           // debounce suggestions to avoid rapid API calls
                           _debounce?.cancel();
