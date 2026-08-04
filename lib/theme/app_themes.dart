@@ -22,17 +22,20 @@
 // lib/theme/app_themes.dart
 //
 // Design system do fork "Musifly" — Light Mode puro, paleta vermelha,
-// tipografia Inter. Mantém as MESMAS assinaturas que main.dart já importa
-// (getAppColorScheme, getAppTheme, getBrightnessFromThemeMode), então NENHUMA
-// outra linha do main.dart, dos services ou da navegação precisa mudar.
+// tipografia Inter. Mantém as MESMAS variáveis/funções globais que
+// main.dart e settings_page.dart já usam (themeMode, brightness,
+// transitionsBuilder, getThemeMode, getBrightnessFromThemeMode,
+// getAppColorScheme, getAppTheme) — só o CONTEÚDO delas mudou.
 //
 // Dependência nova no pubspec.yaml:
 //   dependencies:
 //     google_fonts: ^6.2.1
 // (rode `flutter pub get` depois de adicionar)
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:musify/services/settings_manager.dart';
 
 /// ---------------------------------------------------------------------
 /// Paleta de cores (baseada nas imagens de referência do design)
@@ -103,20 +106,41 @@ class AppTypography {
   );
 }
 
-/// O app é Light Mode puro por definição de design — independente do que o
-/// usuário escolher em Settings (system/dark/light), a marca sempre renderiza
-/// em claro. Mantida como função para não quebrar a chamada existente em
-/// `Musify.changeSettings` (main.dart).
-Brightness getBrightnessFromThemeMode(ThemeMode mode) => Brightness.light;
+// ---------------------------------------------------------------------
+// Estado global de tema (MESMAS variáveis que main.dart/settings_page.dart
+// já importam e escrevem em runtime — preservadas para não quebrar nada).
+// ---------------------------------------------------------------------
+ThemeMode themeMode = getThemeMode(themeModeSetting);
+Brightness brightness = getBrightnessFromThemeMode(themeMode);
+
+PageTransitionsBuilder transitionsBuilder = predictiveBack.value
+    ? const PredictiveBackPageTransitionsBuilder()
+    : const CupertinoPageTransitionsBuilder();
+
+/// O design é Light Mode puro por definição — independente do que o
+/// usuário escolher em Settings (system/dark/light), a marca sempre
+/// renderiza em claro, então o app nunca fica com ícones de status bar
+/// invertidos. `themeMode` continua sendo salvo normalmente pelas
+/// Settings, só não afeta mais a aparência.
+Brightness getBrightnessFromThemeMode(ThemeMode themeMode) => Brightness.light;
+
+ThemeMode getThemeMode(int themeModeIndex) {
+  const themeModes = ThemeMode.values;
+  if (themeModeIndex >= 0 && themeModeIndex < themeModes.length) {
+    return themeModes[themeModeIndex];
+  }
+  return ThemeMode.system;
+}
 
 /// Ignora as cores dinâmicas do Android 12+ (Material You) e qualquer
 /// accent color customizado pelo usuário: o design pede uma paleta FIXA
 /// (vermelho #DC2626 sobre branco / cinza muito claro), não cores extraídas
-/// do papel de parede. Assinatura idêntica à esperada pelo DynamicColorBuilder
-/// em main.dart, então a integração continua igual.
+/// do papel de parede nem do seletor de cor das Settings. Assinatura
+/// idêntica à original, então DynamicColorBuilder em main.dart continua
+/// funcionando sem mudanças.
 ColorScheme getAppColorScheme(
-  ColorScheme? lightDynamic,
-  ColorScheme? darkDynamic,
+  ColorScheme? lightColorScheme,
+  ColorScheme? darkColorScheme,
 ) {
   return const ColorScheme.light(
     brightness: Brightness.light,
@@ -132,10 +156,12 @@ ColorScheme getAppColorScheme(
     onTertiary: Colors.white,
     surface: AppColors.surface,
     onSurface: AppColors.textPrimary,
+    onSurfaceVariant: AppColors.textSecondary,
     surfaceContainerHighest: AppColors.background,
+    surfaceContainerHigh: AppColors.surface,
     surfaceContainer: AppColors.background,
     surfaceContainerLow: AppColors.background,
-    surfaceContainerHigh: AppColors.surface,
+    surfaceContainerLowest: AppColors.surface,
     error: AppColors.accent,
     onError: AppColors.textOnAccent,
     outline: AppColors.divider,
@@ -143,30 +169,39 @@ ColorScheme getAppColorScheme(
   );
 }
 
-/// Monta o ThemeData final a partir do ColorScheme fixo acima.
-/// Mesma assinatura chamada duas vezes em main.dart (theme e darkTheme),
-/// então o app nunca muda de aparência — Light Mode puro sempre.
 ThemeData getAppTheme(ColorScheme colorScheme) {
-  final base = ThemeData(
+  return ThemeData(
     useMaterial3: true,
     brightness: Brightness.light,
     colorScheme: colorScheme,
     scaffoldBackgroundColor: AppColors.background,
     canvasColor: AppColors.background,
+    cardColor: AppColors.surface,
     fontFamily: GoogleFonts.inter().fontFamily,
     textTheme: AppTypography.textTheme,
     splashFactory: InkRipple.splashFactory,
-  );
+    visualDensity: VisualDensity.adaptivePlatformDensity,
 
-  return base.copyWith(
     // ---------- AppBar ----------
     appBarTheme: AppBarTheme(
       backgroundColor: AppColors.background,
+      foregroundColor: AppColors.textPrimary,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
+      scrolledUnderElevation: 0,
       centerTitle: false,
       iconTheme: const IconThemeData(color: AppColors.textPrimary),
       titleTextStyle: AppTypography.textTheme.headlineLarge,
+    ),
+
+    // ---------- Cards ----------
+    cardTheme: CardThemeData(
+      elevation: 0,
+      color: AppColors.surface,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.card),
+      ),
     ),
 
     // ---------- Bottom Navigation Bar ----------
@@ -181,8 +216,6 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       unselectedLabelStyle: AppTypography.textTheme.labelLarge,
       type: BottomNavigationBarType.fixed,
       elevation: 8,
-      showSelectedLabels: true,
-      showUnselectedLabels: true,
     ),
 
     // ---------- NavigationBar (Material 3) ----------
@@ -191,6 +224,7 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       surfaceTintColor: Colors.transparent,
       indicatorColor: Colors.transparent,
       elevation: 8,
+      height: 70,
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return AppTypography.textTheme.labelLarge?.copyWith(
@@ -204,6 +238,18 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
           color: selected ? AppColors.accent : AppColors.iconInactive,
         );
       }),
+    ),
+
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: AppColors.surface,
+      elevation: 0,
+      indicatorColor: Colors.transparent,
+      selectedIconTheme: const IconThemeData(color: AppColors.accent),
+      unselectedIconTheme: const IconThemeData(color: AppColors.iconInactive),
+      selectedLabelTextStyle: AppTypography.textTheme.labelLarge?.copyWith(
+        color: AppColors.accent,
+      ),
+      unselectedLabelTextStyle: AppTypography.textTheme.labelLarge,
     ),
 
     // ---------- FAB (botão "+" vermelho da Library) ----------
@@ -221,7 +267,6 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
         foregroundColor: Colors.white,
         shape: const CircleBorder(),
         elevation: 0,
-        padding: const EdgeInsets.all(14),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -240,23 +285,12 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       style: IconButton.styleFrom(foregroundColor: AppColors.textPrimary),
     ),
 
-    // ---------- Cards ----------
-    cardTheme: CardThemeData(
-      color: AppColors.surface,
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadii.card),
-      ),
-    ),
-
-    // ---------- Listas (Settings, listagens de música, etc.) ----------
+    // ---------- Listas ----------
     listTileTheme: ListTileThemeData(
       iconColor: AppColors.accent,
       textColor: AppColors.textPrimary,
       titleTextStyle: AppTypography.textTheme.titleMedium,
       subtitleTextStyle: AppTypography.textTheme.bodyMedium,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     ),
 
     // ---------- Divisores ----------
@@ -280,9 +314,10 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       dividerColor: Colors.transparent,
     ),
 
-    // ---------- Campo de busca ----------
+    // ---------- Campo de busca / inputs (linha sublinhada) ----------
     inputDecorationTheme: InputDecorationTheme(
       filled: false,
+      isDense: true,
       contentPadding: const EdgeInsets.symmetric(vertical: 12),
       hintStyle: AppTypography.textTheme.titleMedium?.copyWith(
         color: AppColors.textSecondary,
@@ -306,15 +341,12 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
 
     // ---------- Slider / progress (mini player) ----------
     sliderTheme: SliderThemeData(
+      year2023: false,
       activeTrackColor: AppColors.accent,
       inactiveTrackColor: AppColors.divider,
       thumbColor: AppColors.accent,
       overlayColor: AppColors.accent.withValues(alpha: 0.12),
-      trackHeight: 2,
-    ),
-    progressIndicatorTheme: const ProgressIndicatorThemeData(
-      color: AppColors.accent,
-      linearTrackColor: AppColors.divider,
+      trackHeight: 3,
     ),
 
     // ---------- BottomSheet (menus de contexto "⋮") ----------
@@ -326,6 +358,35 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
       ),
     ),
 
+    // ---------- Dialogs ----------
+    dialogTheme: DialogThemeData(
+      backgroundColor: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppRadii.sheet),
+      ),
+    ),
+
+    // ---------- Popup menu ----------
+    popupMenuTheme: PopupMenuThemeData(
+      color: AppColors.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    ),
+
+    // ---------- SnackBar ----------
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: AppColors.accentSoft,
+      contentTextStyle: const TextStyle(
+        color: AppColors.accentDark,
+        fontWeight: FontWeight.w500,
+      ),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      elevation: 6,
+      actionTextColor: AppColors.accent,
+    ),
+
     // ---------- Chips ----------
     chipTheme: ChipThemeData(
       backgroundColor: AppColors.accentSoft,
@@ -335,6 +396,13 @@ ThemeData getAppTheme(ColorScheme colorScheme) {
         borderRadius: BorderRadius.circular(AppRadii.chip),
       ),
       side: BorderSide.none,
+    ),
+
+    // ---------- Transições de página (mantido igual ao original) ----------
+    pageTransitionsTheme: PageTransitionsTheme(
+      builders: <TargetPlatform, PageTransitionsBuilder>{
+        TargetPlatform.android: transitionsBuilder,
+      },
     ),
   );
 }
