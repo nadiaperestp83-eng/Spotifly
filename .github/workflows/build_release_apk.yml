@@ -54,7 +54,7 @@ jobs:
       - name: Rename APK with version
         run: |
           mkdir -p release
-          cp build/app/outputs/flutter-apk/github/release/app-github-release.apk \
+          cp build/app/outputs/flutter-apk/github/Release/app-github-release.apk \
              "release/musifly-${{ steps.tag.outputs.tag }}.apk"
 
       - name: Create GitHub Release with APK
