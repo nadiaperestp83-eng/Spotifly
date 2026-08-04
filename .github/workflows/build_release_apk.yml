@@ -36,15 +36,14 @@ jobs:
           VERSION_NAME=$(echo "$FULL_VERSION" | cut -d'+' -f1)
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
-      # Cria a keystore padrão exigida pelo Gradle no ambiente de CI do GitHub Actions
+      # Cria a keystore no caminho exato exigido pelo Gradle no ambiente de CI
       - name: Generate Android keystore for build
         run: |
-          mkdir -p ~/.android
-          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p /home/runner/.config/.android
+          keytool -genkey -v -keystore /home/runner/.config/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build release APK
         run: flutter build apk --release --flavor github --no-tree-shake-icons
-
 
       # Tag única por build (versão do pubspec + número do run), pra nunca
       # colidir com uma release já existente em pushes repetidos.
@@ -55,7 +54,7 @@ jobs:
       - name: Rename APK with version
         run: |
           mkdir -p release
-          cp build/app/outputs/flutter-apk/app-release.apk \
+          cp build/app/outputs/flutter-apk/github/release/app-github-release.apk \
              "release/musifly-${{ steps.tag.outputs.tag }}.apk"
 
       - name: Create GitHub Release with APK
