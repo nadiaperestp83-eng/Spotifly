@@ -58,7 +58,7 @@ class _HomePageState extends State<HomePage> {
   late final Future<List> _suggestedPlaylistsFuture;
   late Future<List> _recommendedSongsFuture;
 
-  // ---------- Seção "Ritmos do Mundo" (sem título, lista rolável) ----------
+  // ---------- Seção "Ritmos do Mundo" ----------
   // Lista EXATA passada pelo usuário — nada além disso.
   static const List<String> _worldGenres = [
     'Árabe',
@@ -69,7 +69,7 @@ class _HomePageState extends State<HomePage> {
     'Polca Paraguaia',
     'Fado',
   ];
-  final Set<String> _loadingGenres = {};
+  late final Future<List<Map<String, dynamic>>> _worldRhythmsFuture;
 
   @override
   void initState() {
@@ -78,34 +78,26 @@ class _HomePageState extends State<HomePage> {
       playlistsNum: recommendedCubesNumber,
     );
     _recommendedSongsFuture = getRecommendedSongs();
+    _worldRhythmsFuture = _loadWorldRhythms();
     externalRecommendations.addListener(_refreshRecommendedSongs);
   }
 
-  // Toca ao tocar: busca a primeira playlist do gênero e abre pra tocar.
-  // Reaproveita getPlaylists(query:, type:) — mesma função já usada na
-  // Search — e a mesma rota de playlist já usada nos outros cards desta
-  // tela (context.push('/home/playlist/...')), que é a única forma
-  // confirmada de abrir/tocar uma playlist neste projeto até agora.
-  Future<void> _playGenre(BuildContext context, String genre) async {
-    if (_loadingGenres.contains(genre)) return;
-    setState(() => _loadingGenres.add(genre));
-    try {
-      final playlists = await getPlaylists(query: genre, type: 'playlist');
-      if (playlists.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Nenhum resultado para $genre.')),
-          );
-        }
-        return;
-      }
-      final playlist = Map<String, dynamic>.from(playlists.first);
-      if (context.mounted) {
-        context.push('/home/playlist/${playlist['ytid']}');
-      }
-    } finally {
-      if (mounted) setState(() => _loadingGenres.remove(genre));
-    }
+  // Busca, em paralelo, a playlist de capa de cada um dos 7 gêneros.
+  // Mesma função getPlaylists(query:, type:) já usada na Search — nenhum
+  // endpoint novo.
+  Future<List<Map<String, dynamic>>> _loadWorldRhythms() async {
+    final results = await Future.wait(
+      _worldGenres.map((genre) => getPlaylists(query: genre, type: 'playlist')),
+    );
+    return List.generate(_worldGenres.length, (i) {
+      final playlists = results[i];
+      return {
+        'genre': _worldGenres[i],
+        'playlist': playlists.isNotEmpty
+            ? Map<String, dynamic>.from(playlists.first)
+            : null,
+      };
+    });
   }
 
   @override
@@ -503,92 +495,89 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ---------------------------------------------------------------------
-  // Ritmos do Mundo — título + lista rolável dos 7 gêneros exatos que
-  // você passou. Tocar num item já toca a música (sem passo intermediário
-  // de "selecionar filtro e depois ver cards").
+  // Ritmos do Mundo — MESMO estilo visual do "Recommended for you": cards
+  // com a capa da playlist do gênero, gradiente escuro e nome sobreposto
+  // embaixo. Tocar num card abre a playlist (mesma rota já usada em toda
+  // a Home: context.push('/home/playlist/...')).
   // ---------------------------------------------------------------------
   Widget _buildWorldRhythmsSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _sectionTitle(context, 'Ritmos do Mundo'),
-        SizedBox(
-          height: 44,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            itemCount: _worldGenres.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 10),
-            itemBuilder: (context, index) {
-              final genre = _worldGenres[index];
-              return _GenrePill(
-                label: genre,
-                loading: _loadingGenres.contains(genre),
-                onTap: () => _playGenre(context, genre),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-}
+    const cardSize = 150.0;
 
-/// Item da lista rolável "Ritmos do Mundo" — pílula com ícone de play,
-/// vira spinner enquanto busca a playlist do gênero ao ser tocado.
-class _GenrePill extends StatelessWidget {
-  const _GenrePill({
-    required this.label,
-    required this.loading,
-    required this.onTap,
-  });
+    return AsyncLoader<List<Map<String, dynamic>>>(
+      future: _worldRhythmsFuture,
+      builder: (context, entries) {
+        if (entries.isEmpty) return const SizedBox.shrink();
 
-  final String label;
-  final bool loading;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: loading ? null : onTap,
-      borderRadius: BorderRadius.circular(AppRadii.chip),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(AppRadii.chip),
-          border: Border.all(color: AppColors.divider),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (loading)
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.accent,
-                ),
-              )
-            else
-              const Icon(
-                Icons.play_arrow_rounded,
-                size: 16,
-                color: AppColors.accent,
-              ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
+            _sectionTitle(context, 'Ritmos do Mundo'),
+            SizedBox(
+              height: cardSize,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: entries.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final entry = entries[index];
+                  final genre = entry['genre'] as String;
+                  final playlist = entry['playlist'] as Map<String, dynamic>?;
+
+                  return GestureDetector(
+                    onTap: playlist == null
+                        ? null
+                        : () => context.push(
+                            '/home/playlist/${playlist['ytid']}',
+                          ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(AppRadii.cardLarge),
+                      child: SizedBox(
+                        width: cardSize * 0.72,
+                        height: cardSize,
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (playlist != null)
+                              PlaylistCube(playlist, size: cardSize)
+                            else
+                              Container(color: AppColors.accentSoft),
+                            IgnorePointer(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withValues(alpha: 0.75),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              left: 10,
+                              right: 10,
+                              bottom: 10,
+                              child: Text(
+                                genre,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium
+                                    ?.copyWith(color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 }
