@@ -71,11 +71,12 @@ android {
                 keyPassword = keystoreProperties["keyPassword"] as String?
                 storePassword = keystoreProperties["storePassword"] as String?
             } else {
-                // Fallback automático para a chave de debug padrão caso o key.jks não exista
-                storeFile = file("debug.keystore")
-                keyAlias = "androiddebugkey"
-                keyPassword = "android"
-                storePassword = "android"
+                // Herda a configuração de assinatura de debug nativa do Android para evitar erros de arquivos inexistentes
+                val debugConfig = getByName("debug")
+                storeFile = debugConfig.storeFile
+                storePassword = debugConfig.storePassword
+                keyAlias = debugConfig.keyAlias
+                keyPassword = debugConfig.keyPassword
             }
         }
     }
