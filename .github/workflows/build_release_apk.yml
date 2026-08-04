@@ -1,0 +1,65 @@
+name: Build Release APK
+
+# Roda a cada push na master OU manualmente (aba Actions > Run workflow)
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+# Necessário pra o workflow poder criar Releases no repositório
+permissions:
+  contents: write
+
+jobs:
+  build-release-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Lê o "version:" do pubspec.yaml (ex.: 10.1.0+42) pra nomear a release.
+      - name: Read app version from pubspec.yaml
+        id: version
+        run: |
+          FULL_VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          VERSION_NAME=$(echo "$FULL_VERSION" | cut -d'+' -f1)
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+
+      # Sem keystore próprio: o build.gradle padrão do Flutter cai pra
+      # signingConfigs.debug no release quando não há config custom.
+      # Se o seu android/app/build.gradle já referenciar um keystore.properties
+      # que não existe, este passo vai falhar — nesse caso comente/remova
+      # essa referência lá antes de rodar o workflow.
+      - name: Build release APK (unsigned / debug key)
+        run: flutter build apk --release
+
+      # Tag única por build (versão do pubspec + número do run), pra nunca
+      # colidir com uma release já existente em pushes repetidos.
+      - name: Set release tag
+        id: tag
+        run: echo "tag=v${{ steps.version.outputs.version_name }}-build${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Rename APK with version
+        run: |
+          mkdir -p release
+          cp build/app/outputs/flutter-apk/app-release.apk \
+             "release/musifly-${{ steps.tag.outputs.tag }}.apk"
+
+      - name: Create GitHub Release with APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "Musifly ${{ steps.tag.outputs.tag }}"
+          generate_release_notes: true
+          files: release/*.apk
