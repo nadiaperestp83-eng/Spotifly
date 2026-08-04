@@ -64,13 +64,19 @@ android {
 
     signingConfigs {
         create("release") {
-            // From decoded key
-            storeFile = file("key.jks")
-
-            // From key.properties
-            keyAlias = keystoreProperties["keyAlias"] as String?
-            keyPassword = keystoreProperties["keyPassword"] as String?
-            storePassword = keystoreProperties["storePassword"] as String?
+            val keyFile = file("key.jks")
+            if (keyFile.exists()) {
+                storeFile = keyFile
+                keyAlias = keystoreProperties["keyAlias"] as String?
+                keyPassword = keystoreProperties["keyPassword"] as String?
+                storePassword = keystoreProperties["storePassword"] as String?
+            } else {
+                // Fallback automático para a chave de debug padrão caso o key.jks não exista
+                storeFile = file("debug.keystore")
+                keyAlias = "androiddebugkey"
+                keyPassword = "android"
+                storePassword = "android"
+            }
         }
     }
 
