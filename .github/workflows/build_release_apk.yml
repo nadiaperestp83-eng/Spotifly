@@ -36,12 +36,13 @@ jobs:
           VERSION_NAME=$(echo "$FULL_VERSION" | cut -d'+' -f1)
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
-      # Sem keystore próprio: o build.gradle padrão do Flutter cai pra
-      # signingConfigs.debug no release quando não há config custom.
-      # Se o seu android/app/build.gradle já referenciar um keystore.properties
-      # que não existe, este passo vai falhar — nesse caso comente/remova
-      # essa referência lá antes de rodar o workflow.
-      - name: Build release APK (unsigned / debug key)
+      # Cria a keystore padrão exigida pelo Gradle no ambiente de CI do GitHub Actions
+      - name: Generate Android keystore for build
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+
+      - name: Build release APK
         run: flutter build apk --release
 
       # Tag única por build (versão do pubspec + número do run), pra nunca
