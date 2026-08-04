@@ -19,6 +19,13 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+// lib/screens/search_page.dart
+//
+// Reskin visual da Search conforme o design (header "Search" grande,
+// campo sublinhado com placeholder "Songs, Playlist, Album or Artist",
+// histórico com ícone de relógio + X pra limpar item). NENHUMA chamada de
+// API, debounce, sugestão ou lógica de busca foi alterada.
+
 import 'dart:async';
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -34,11 +41,11 @@ import 'package:musify/services/common_services.dart';
 import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
+import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/app_utils.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/widgets/artist_bar.dart';
 import 'package:musify/widgets/confirmation_dialog.dart';
-import 'package:musify/widgets/custom_bar.dart';
 import 'package:musify/widgets/custom_search_bar.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 import 'package:musify/widgets/playlist_bar.dart';
@@ -189,146 +196,160 @@ class _SearchPageState extends State<SearchPage> {
     return [];
   }
 
+  Future<void> _removeHistoryItem(String query) async {
+    if (!searchHistory.contains(query)) return;
+    final updatedHistory = List.from(searchHistory)..remove(query);
+    searchHistoryNotifier.value = updatedHistory;
+    unawaited(addOrUpdateData<List>('user', 'searchHistory', updatedHistory));
+  }
+
   @override
   Widget build(BuildContext context) {
     final primaryColor = Theme.of(context).colorScheme.primary;
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n!.search)),
-      body: SingleChildScrollView(
-        padding: commonSingleChildScrollViewPadding,
-        child: Column(
-          children: <Widget>[
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final isWide = constraints.maxWidth > 600;
-                final bar = ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxWidth: isWide ? 600 : double.infinity,
-                  ),
-                  child: CustomSearchBar(
-                    loadingProgressNotifier: _fetchingSongs,
-                    controller: _searchBar,
-                    focusNode: _inputNode,
-                    labelText: '${context.l10n!.search}...',
-                    onChanged: (value) {
-                      // debounce suggestions to avoid rapid API calls
-                      _debounce?.cancel();
-                      final query = value;
-                      final requestId = ++_latestSuggestionRequest;
+      backgroundColor: AppColors.background,
+      body: SafeArea(
+        bottom: false,
+        child: SingleChildScrollView(
+          padding: commonSingleChildScrollViewPadding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              // ---------- Cabeçalho "Search" (sem AppBar) ----------
+              Padding(
+                padding: const EdgeInsets.fromLTRB(4, 12, 4, 20),
+                child: Text(
+                  context.l10n!.search,
+                  style: Theme.of(context).textTheme.headlineLarge,
+                ),
+              ),
 
-                      // Clear suggestions immediately if input is empty
-                      if (query.isEmpty) {
-                        _suggestionsList = [];
-                        if (mounted) setState(() {});
-                        return;
-                      }
+              // ---------- Campo de busca sublinhado ----------
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth > 600;
+                    final bar = ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: isWide ? 600 : double.infinity,
+                      ),
+                      child: CustomSearchBar(
+                        loadingProgressNotifier: _fetchingSongs,
+                        controller: _searchBar,
+                        focusNode: _inputNode,
+                        labelText:
+                            context.l10n?.searchPlaceholder ??
+                            'Songs, Playlist, Album or Artist',
+                        onChanged: (value) {
+                          // debounce suggestions to avoid rapid API calls
+                          _debounce?.cancel();
+                          final query = value;
+                          final requestId = ++_latestSuggestionRequest;
 
-                      _debounce = Timer(
-                        const Duration(milliseconds: 300),
-                        () async {
-                          final searchSuggestions = await getSearchSuggestions(
-                            query,
-                          );
-
-                          if (!mounted ||
-                              requestId != _latestSuggestionRequest ||
-                              _searchBar.text != query) {
+                          // Clear suggestions immediately if input is empty
+                          if (query.isEmpty) {
+                            _suggestionsList = [];
+                            if (mounted) setState(() {});
                             return;
                           }
 
-                          _suggestionsList = List<String>.from(
-                            searchSuggestions,
+                          _debounce = Timer(
+                            const Duration(milliseconds: 300),
+                            () async {
+                              final searchSuggestions =
+                                  await getSearchSuggestions(query);
+
+                              if (!mounted ||
+                                  requestId != _latestSuggestionRequest ||
+                                  _searchBar.text != query) {
+                                return;
+                              }
+
+                              _suggestionsList = List<String>.from(
+                                searchSuggestions,
+                              );
+                              if (mounted) setState(() {});
+                            },
                           );
-                          if (mounted) setState(() {});
                         },
+                        onSubmitted: (String value) {
+                          _submitSearch();
+                        },
+                      ),
+                    );
+                    if (isWide) {
+                      return Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [bar],
                       );
-                    },
-                    onSubmitted: (String value) {
-                      _submitSearch();
-                    },
-                  ),
-                );
-                if (isWide) {
-                  return Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [bar],
-                  );
-                } else {
-                  return bar;
-                }
-              },
-            ),
+                    } else {
+                      return bar;
+                    }
+                  },
+                ),
+              ),
 
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child:
-                  (_suggestionsList.isNotEmpty ||
-                      (_songsSearchResult.isEmpty &&
-                          _artistsSearchResult.isEmpty &&
-                          _albumsSearchResult.isEmpty &&
-                          _playlistsSearchResult.isEmpty &&
-                          _radioStationsSearchResult.isEmpty))
-                  ? ValueListenableBuilder<List>(
-                      valueListenable: searchHistoryNotifier,
-                      builder: (context, searchHistory, _) {
-                        final items = _suggestionsList.isEmpty
-                            ? searchHistory
-                            : _suggestionsList;
+              const SizedBox(height: 8),
 
-                        return Column(
-                          key: ValueKey(
-                            'history-${_suggestionsList.length}-${_searchBar.text}-${searchHistory.length}',
-                          ),
-                          children: [
-                            for (int index = 0; index < items.length; index++)
-                              Builder(
-                                builder: (context) {
-                                  final query = items[index];
-                                  final borderRadius = getItemBorderRadius(
-                                    index,
-                                    items.length,
-                                  );
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 200),
+                child:
+                    (_suggestionsList.isNotEmpty ||
+                        (_songsSearchResult.isEmpty &&
+                            _artistsSearchResult.isEmpty &&
+                            _albumsSearchResult.isEmpty &&
+                            _playlistsSearchResult.isEmpty &&
+                            _radioStationsSearchResult.isEmpty))
+                    ? ValueListenableBuilder<List>(
+                        valueListenable: searchHistoryNotifier,
+                        builder: (context, searchHistory, _) {
+                          final items = _suggestionsList.isEmpty
+                              ? searchHistory
+                              : _suggestionsList;
+                          final isHistory = _suggestionsList.isEmpty;
 
-                                  return CustomBar(
-                                    query,
-                                    FluentIcons.search_24_regular,
-                                    borderRadius: borderRadius,
-                                    onTap: () async {
-                                      await _submitSearch(query.toString());
-                                    },
-                                    onLongPress: () async {
-                                      final confirm =
-                                          await _showConfirmationDialog(
-                                            context,
-                                          ) ??
-                                          false;
-                                      if (confirm &&
-                                          searchHistory.contains(query)) {
-                                        final updatedHistory = List.from(
-                                          searchHistory,
-                                        )..remove(query);
-                                        searchHistoryNotifier.value =
-                                            updatedHistory;
-                                        unawaited(
-                                          addOrUpdateData<List>(
-                                            'user',
-                                            'searchHistory',
-                                            updatedHistory,
-                                          ),
-                                        );
-                                      }
-                                    },
-                                  );
-                                },
-                              ),
-                          ],
-                        );
-                      },
-                    )
-                  : _buildSearchResults(context, primaryColor),
-            ),
-            const MiniPlayerBottomSpace(),
-          ],
+                          return Column(
+                            key: ValueKey(
+                              'history-${_suggestionsList.length}-${_searchBar.text}-${searchHistory.length}',
+                            ),
+                            children: [
+                              for (
+                                int index = 0;
+                                index < items.length;
+                                index++
+                              )
+                                _HistoryRow(
+                                  key: ValueKey('search_item_$index'),
+                                  text: items[index].toString(),
+                                  showClearButton: isHistory,
+                                  onTap: () async {
+                                    await _submitSearch(
+                                      items[index].toString(),
+                                    );
+                                  },
+                                  onClear: () async {
+                                    final confirm =
+                                        await _showConfirmationDialog(
+                                          context,
+                                        ) ??
+                                        false;
+                                    if (confirm) {
+                                      await _removeHistoryItem(
+                                        items[index].toString(),
+                                      );
+                                    }
+                                  },
+                                ),
+                            ],
+                          );
+                        },
+                      )
+                    : _buildSearchResults(context, primaryColor),
+              ),
+              const MiniPlayerBottomSpace(),
+            ],
+          ),
         ),
       ),
     );
@@ -532,6 +553,57 @@ class _SearchPageState extends State<SearchPage> {
           },
         );
       },
+    );
+  }
+}
+
+/// Linha de histórico/sugestão no padrão do design:
+/// ícone de relógio cinza -> termo -> X pra limpar (só no histórico).
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({
+    required this.text,
+    required this.onTap,
+    this.showClearButton = false,
+    this.onClear,
+    super.key,
+  });
+
+  final String text;
+  final bool showClearButton;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        child: Row(
+          children: [
+            Icon(
+              FluentIcons.history_24_regular,
+              size: 20,
+              color: AppColors.iconInactive,
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (showClearButton)
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                color: AppColors.textPrimary,
+                onPressed: onClear,
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
