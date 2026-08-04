@@ -1,13 +1,11 @@
 name: Build Release APK
 
-# Roda a cada push na master OU manualmente (aba Actions > Run workflow)
 on:
   push:
     branches:
       - master
   workflow_dispatch:
 
-# Necessário pra o workflow poder criar Releases no repositório
 permissions:
   contents: write
 
@@ -28,7 +26,6 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      # Lê o "version:" do pubspec.yaml (ex.: 10.1.0+42) pra nomear a release.
       - name: Read app version from pubspec.yaml
         id: version
         run: |
@@ -36,7 +33,6 @@ jobs:
           VERSION_NAME=$(echo "$FULL_VERSION" | cut -d'+' -f1)
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
 
-      # Cria a keystore no caminho exato exigido pelo Gradle no ambiente de CI
       - name: Generate Android keystore for build
         run: |
           mkdir -p /home/runner/.config/.android
@@ -45,17 +41,17 @@ jobs:
       - name: Build release APK
         run: flutter build apk --release --flavor github --no-tree-shake-icons
 
-      # Tag única por build (versão do pubspec + número do run), pra nunca
-      # colidir com uma release já existente em pushes repetidos.
       - name: Set release tag
         id: tag
         run: echo "tag=v${{ steps.version.outputs.version_name }}-build${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
-      - name: Rename APK with version
+      - name: Find and Rename APK
         run: |
           mkdir -p release
-          cp build/app/outputs/flutter-apk/github/Release/app-github-release.apk \
-             "release/musifly-${{ steps.tag.outputs.tag }}.apk"
+          # Procura por qualquer APK de release gerado dentro da pasta de outputs do projeto
+          APK_PATH=$(find build/app/outputs/ -name "*.apk" | grep -i "release" | head -n 1)
+          echo "APK encontrado em: $APK_PATH"
+          cp "$APK_PATH" "release/musifly-${{ steps.tag.outputs.tag }}.apk"
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
