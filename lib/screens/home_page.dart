@@ -81,11 +81,15 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  // Texto fixo em português (o design pede literalmente "Bom dia").
+  // Se quiser traduzir para os outros idiomas do app depois, adicione as
+  // chaves goodMorning/goodAfternoon/goodEvening no seu app_localizations
+  // e troque os literais abaixo por context.l10n!.goodMorning etc.
   String _greeting(BuildContext context) {
     final hour = DateTime.now().hour;
-    if (hour < 12) return context.l10n?.goodMorning ?? 'Bom dia';
-    if (hour < 18) return context.l10n?.goodAfternoon ?? 'Boa tarde';
-    return context.l10n?.goodEvening ?? 'Boa noite';
+    if (hour < 12) return 'Bom dia';
+    if (hour < 18) return 'Boa tarde';
+    return 'Boa noite';
   }
 
   @override
@@ -379,7 +383,8 @@ class _HomePageState extends State<HomePage> {
                               ?.copyWith(color: AppColors.textOnAccent),
                         ),
                         Text(
-                          context.l10n?.madeForYou ?? 'Feito pra você',
+                          // Texto fixo (mesma observação de _greeting acima).
+                          'Feito pra você',
                           style: Theme.of(context).textTheme.bodyMedium
                               ?.copyWith(
                                 color: AppColors.textOnAccent.withValues(
