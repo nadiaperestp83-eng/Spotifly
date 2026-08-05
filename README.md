@@ -14,6 +14,8 @@ Se este projeto foi útil para você e deseja apoiar o desenvolvimento contínuo
 
 Unlock the full potential of music: Stream effortlessly with one app!
 
+An app based Musify and Melodify 
+
 
 [![License](https://img.shields.io/github/license/gokadzev/Musify?color=D3BEAB)](LICENSE)
 
