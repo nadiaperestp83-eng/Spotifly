@@ -35,7 +35,6 @@ import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/services/update_manager.dart';
-import 'package:musify/theme/app_colors.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_bottom_sheet.dart';
 import 'package:musify/utilities/flutter_toast.dart';
@@ -93,14 +92,9 @@ class SettingsPage extends StatelessWidget {
           icon: FluentIcons.options_24_filled,
         ),
         CustomBar(
-          context.l10n!.accentColor,
-          FluentIcons.color_24_regular,
-          borderRadius: commonCustomBarRadiusFirst,
-          onTap: () => _showAccentColorPicker(context),
-        ),
-        CustomBar(
           context.l10n!.themeMode,
           FluentIcons.weather_sunny_28_regular,
+          borderRadius: commonCustomBarRadiusFirst,
           onTap: () => _showThemeModePicker(context),
         ),
         CustomBar(
@@ -131,14 +125,6 @@ class SettingsPage extends StatelessWidget {
           context.l10n!.equalizer,
           FluentIcons.data_histogram_24_regular,
           onTap: () => context.push('/settings/equalizer'),
-        ),
-        CustomBar(
-          context.l10n!.dynamicColor,
-          FluentIcons.toggle_left_24_regular,
-          trailing: Switch(
-            value: useSystemColor.value,
-            onChanged: (value) => _toggleSystemColor(context, value),
-          ),
         ),
         if (themeMode == ThemeMode.dark)
           CustomBar(
@@ -286,7 +272,6 @@ class SettingsPage extends StatelessWidget {
         ),
 
         _buildToolsSection(context),
-        _buildSponsorSection(context),
       ],
     );
   }
@@ -437,89 +422,6 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildSponsorSection(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Column(
-      children: [
-        SectionHeader(
-          title: context.l10n!.becomeSponsor,
-          icon: FluentIcons.heart_24_filled,
-        ),
-        Card(
-          margin: const EdgeInsets.only(bottom: 3),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15),
-          ),
-          child: DecoratedBox(
-            decoration: BoxDecoration(borderRadius: BorderRadius.circular(15)),
-            child: Material(
-              color: colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(15),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(15),
-                onTap: () => launchURL(Uri.parse('https://ko-fi.com/gokadzev')),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 12,
-                    horizontal: 16,
-                  ),
-                  child: SizedBox(
-                    height: 45,
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: colorScheme.onPrimaryContainer.withValues(
-                              alpha: 0.15,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(
-                            FluentIcons.heart_24_regular,
-                            color: colorScheme.onPrimaryContainer,
-                            size: 24,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Text(
-                            context.l10n!.sponsorProject,
-                            style: TextStyle(
-                              color: colorScheme.onPrimaryContainer,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: colorScheme.onPrimaryContainer.withValues(
-                              alpha: 0.1,
-                            ),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(
-                            FluentIcons.arrow_right_24_regular,
-                            color: colorScheme.onPrimaryContainer,
-                            size: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildOthersSection(BuildContext context) {
     return Column(
       children: [
@@ -528,15 +430,10 @@ class SettingsPage extends StatelessWidget {
           icon: FluentIcons.more_circle_24_filled,
         ),
         CustomBar(
-          context.l10n!.licenses,
-          FluentIcons.document_24_regular,
-          borderRadius: commonCustomBarRadiusFirst,
-          onTap: () => NavigationManager.router.go('/settings/license'),
-        ),
-        CustomBar(
           context.l10n!.translate,
           FluentIcons.translate_24_regular,
           description: context.l10n!.translateDescription,
+          borderRadius: commonCustomBarRadiusFirst,
           onTap: () =>
               launchURL(Uri.parse('https://crowdin.com/project/musify')),
         ),
@@ -552,67 +449,6 @@ class SettingsPage extends StatelessWidget {
           onTap: () => NavigationManager.router.go('/settings/about'),
         ),
       ],
-    );
-  }
-
-  void _showAccentColorPicker(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    showCustomBottomSheet(
-      context,
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        child: GridView.builder(
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 5,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-          ),
-          shrinkWrap: true,
-          physics: const BouncingScrollPhysics(),
-          itemCount: availableColors.length,
-          itemBuilder: (context, index) {
-            final color = availableColors[index];
-            final isSelected = color == primaryColorSetting;
-
-            return GestureDetector(
-              onTap: () {
-                addOrUpdateData<int>(
-                  'settings',
-                  'accentColor',
-                  color.toARGB32(),
-                );
-                Musify.updateAppState(
-                  context,
-                  newAccentColor: color,
-                  useSystemColor: false,
-                );
-                showToast(context, context.l10n!.accentChangeMsg);
-                Navigator.pop(context);
-              },
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: isSelected
-                      ? Border.all(color: colorScheme.onSurface, width: 3)
-                      : null,
-                ),
-                child: isSelected
-                    ? Icon(
-                        FluentIcons.checkmark_20_filled,
-                        color: color.computeLuminance() > 0.5
-                            ? Colors.black
-                            : Colors.white,
-                        size: 24,
-                      )
-                    : null,
-              ),
-            );
-          },
-        ),
-      ),
     );
   }
 
@@ -732,17 +568,6 @@ class SettingsPage extends StatelessWidget {
         },
       ),
     );
-  }
-
-  void _toggleSystemColor(BuildContext context, bool value) {
-    addOrUpdateData<bool>('settings', 'useSystemColor', value);
-    useSystemColor.value = value;
-    Musify.updateAppState(
-      context,
-      newAccentColor: primaryColorSetting,
-      useSystemColor: value,
-    );
-    showToast(context, context.l10n!.settingChangedMsg);
   }
 
   void _togglePureBlack(BuildContext context, bool value) {
