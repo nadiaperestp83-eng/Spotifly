@@ -19,6 +19,13 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+// lib/widgets/now_playing/now_playing_controls.dart
+//
+// Controles do Now Playing no estilo Apple Music: icones soltos (sem caixa
+// de fundo colorida), botao de play/pause central com circulo neutro claro,
+// tudo espacado na horizontal. NENHUMA logica de shuffle/repeat/skip/
+// navegacao de artista foi alterada - so a aparencia dos botoes.
+
 import 'dart:async';
 
 import 'package:audio_service/audio_service.dart';
@@ -239,18 +246,15 @@ class PlayerControlButtons extends StatelessWidget {
             : isTight
             ? 42.0
             : 46.0;
-        final buttonPadding = EdgeInsets.all(
-          isUltraTight
-              ? 6.0
-              : isTight
-              ? 8.0
-              : 10.0,
-        );
 
         final buttonConstraints = BoxConstraints(
           minWidth: minButtonSize,
           minHeight: minButtonSize,
         );
+
+        // Estilo Apple Music: sem padding/caixa em volta do icone - ele fica
+        // solto, so o proprio icone define a area de toque via constraints.
+        const buttonPadding = EdgeInsets.zero;
 
         final controlIconSize =
             responsiveIconSize *
@@ -278,6 +282,7 @@ class PlayerControlButtons extends StatelessWidget {
         return Padding(
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: <Widget>[
               _buildShuffleButton(
                 context,
@@ -286,7 +291,6 @@ class PlayerControlButtons extends StatelessWidget {
                 buttonConstraints,
                 buttonPadding,
               ),
-              SizedBox(width: buttonSpacing),
               Expanded(
                 child: Center(
                   child: _PlaybackControlsRow(
@@ -300,7 +304,6 @@ class PlayerControlButtons extends StatelessWidget {
                   ),
                 ),
               ),
-              SizedBox(width: buttonSpacing),
               _buildRepeatButton(
                 context,
                 colorScheme,
@@ -315,6 +318,8 @@ class PlayerControlButtons extends StatelessWidget {
     );
   }
 
+  // Icone solto (sem fundo/caixa) - vermelho de destaque quando ativo,
+  // cinza quando inativo. Igual ao padrao visual do Apple Music.
   Widget _buildShuffleButton(
     BuildContext context,
     ColorScheme colorScheme,
@@ -330,19 +335,15 @@ class PlayerControlButtons extends StatelessWidget {
             value
                 ? FluentIcons.arrow_shuffle_24_filled
                 : FluentIcons.arrow_shuffle_off_24_regular,
-            color: value ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
+            color: value ? colorScheme.primary : colorScheme.onSurfaceVariant,
           ),
           tooltip: context.l10n!.shuffle,
           iconSize: size,
           constraints: buttonConstraints,
           padding: buttonPadding,
           style: IconButton.styleFrom(
-            backgroundColor: value
-                ? colorScheme.primary
-                : colorScheme.surfaceContainerHighest,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
+            backgroundColor: Colors.transparent,
+            splashFactory: NoSplash.splashFactory,
           ),
           onPressed: () {
             audioHandler.setShuffleMode(
@@ -380,7 +381,7 @@ class PlayerControlButtons extends StatelessWidget {
                     ? FluentIcons.arrow_repeat_all_24_filled
                     : FluentIcons.arrow_repeat_all_off_24_regular,
                 color: isActive
-                    ? colorScheme.onPrimary
+                    ? colorScheme.primary
                     : colorScheme.onSurfaceVariant,
               ),
               tooltip: context.l10n!.repeat,
@@ -388,12 +389,8 @@ class PlayerControlButtons extends StatelessWidget {
               constraints: buttonConstraints,
               padding: buttonPadding,
               style: IconButton.styleFrom(
-                backgroundColor: isActive
-                    ? colorScheme.primary
-                    : colorScheme.surfaceContainerHighest,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
+                backgroundColor: Colors.transparent,
+                splashFactory: NoSplash.splashFactory,
               ),
               onPressed: () {
                 final AudioServiceRepeatMode newMode;
@@ -450,7 +447,7 @@ class _PlaybackControlsRow extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _PlaybackControlButton(
-                    icon: FluentIcons.previous_24_regular,
+                    icon: FluentIcons.previous_24_filled,
                     isEnabled:
                         audioHandler.hasPrevious ||
                         repeatMode != AudioServiceRepeatMode.none,
@@ -462,16 +459,20 @@ class _PlaybackControlsRow extends StatelessWidget {
                     controlIconSize: controlIconSize,
                     minButtonSize: minButtonSize,
                   ),
-                  SizedBox(width: buttonSpacing),
+                  SizedBox(width: buttonSpacing * 1.5),
+                  // Play/pause central - circulo neutro claro com icone
+                  // escuro, igual ao Apple Music (nao vermelho solido).
                   PlaybackIconButton(
-                    iconColor: colorScheme.onPrimary,
-                    backgroundColor: colorScheme.primary,
+                    iconColor: colorScheme.onSurface,
+                    backgroundColor: colorScheme.onSurface.withValues(
+                      alpha: 0.08,
+                    ),
                     iconSize: controlIconSize,
                     padding: playPadding,
                   ),
-                  SizedBox(width: buttonSpacing),
+                  SizedBox(width: buttonSpacing * 1.5),
                   _PlaybackControlButton(
-                    icon: FluentIcons.next_24_regular,
+                    icon: FluentIcons.next_24_filled,
                     isEnabled:
                         audioHandler.hasNext ||
                         repeatMode == AudioServiceRepeatMode.one,
@@ -529,14 +530,16 @@ class _PlaybackControlButton extends StatelessWidget {
       ),
       tooltip: tooltip,
       constraints: buttonConstraints,
-      iconSize: controlIconSize * 0.65,
+      // Prev/Next um pouco maiores que antes (sem caixa em volta, precisam
+      // de mais peso visual proprio) - igual a proporcao do Apple Music.
+      iconSize: controlIconSize * 0.8,
       onPressed: isEnabled ? onPressed : null,
       style: IconButton.styleFrom(
-        backgroundColor: colorScheme.surfaceContainerHighest,
-        disabledBackgroundColor: colorScheme.surfaceContainerHighest,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: Colors.transparent,
+        disabledBackgroundColor: Colors.transparent,
         padding: buttonPadding,
         minimumSize: Size(minButtonSize, minButtonSize),
+        splashFactory: NoSplash.splashFactory,
       ),
     );
   }
