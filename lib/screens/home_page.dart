@@ -20,10 +20,6 @@
  */
 
 // lib/screens/home_page.dart
-//
-// Reskin visual da Home conforme o design system (Light Mode, vermelho,
-// cards arredondados). NENHUMA chamada de API, use case, Future ou
-// audioHandler foi alterada — só a árvore de widgets (layout/estilo).
 // Se o caminho real do arquivo no seu fork for diferente de
 // lib/screens/home_page.dart, apenas salve neste mesmo caminho existente.
 
@@ -34,12 +30,12 @@ import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/common_services.dart';
+import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/app_utils.dart';
-import 'package:musify/utilities/async_loader.dart';
 import 'package:musify/utilities/listening_stats_utils.dart';
 import 'package:musify/widgets/announcement_box.dart';
 import 'package:musify/widgets/listening_recap_card.dart';
@@ -70,6 +66,7 @@ class _HomePageState extends State<HomePage> {
     'Fado',
   ];
   late final Future<List<Map<String, dynamic>>> _worldRhythmsFuture;
+  final Set<String> _loadingGenres = {};
 
   @override
   void initState() {
@@ -82,22 +79,31 @@ class _HomePageState extends State<HomePage> {
     externalRecommendations.addListener(_refreshRecommendedSongs);
   }
 
-  // Busca, em paralelo, a playlist de capa de cada um dos 7 gêneros.
-  // Mesma função getPlaylists(query:, type:) já usada na Search — nenhum
-  // endpoint novo.
+  // Busca MÚSICAS de verdade por gênero (não playlists — buscar playlist
+  // pelo nome cru do gênero foi o que puxou "Fale Árabe", uma playlist de
+  // aula de idioma, em vez de música árabe). fetchSongsList é a mesma
+  // função de busca de músicas usada na Search page; "música" no final da
+  // query ajuda a evitar conteúdo falado/podcast/aula.
   Future<List<Map<String, dynamic>>> _loadWorldRhythms() async {
     final results = await Future.wait(
-      _worldGenres.map((genre) => getPlaylists(query: genre, type: 'playlist')),
+      _worldGenres.map((genre) => fetchSongsList('$genre música')),
     );
     return List.generate(_worldGenres.length, (i) {
-      final playlists = results[i];
-      return {
-        'genre': _worldGenres[i],
-        'playlist': playlists.isNotEmpty
-            ? Map<String, dynamic>.from(playlists.first)
-            : null,
-      };
+      return {'genre': _worldGenres[i], 'songs': List<dynamic>.from(results[i])};
     });
+  }
+
+  Future<void> _playGenreSongs(String genre, List<dynamic> songs) async {
+    if (_loadingGenres.contains(genre) || songs.isEmpty) return;
+    setState(() => _loadingGenres.add(genre));
+    try {
+      await audioHandler.playPlaylistSong(
+        playlist: {'title': 'Ritmos do Mundo · $genre', 'list': songs},
+        songIndex: 0,
+      );
+    } finally {
+      if (mounted) setState(() => _loadingGenres.remove(genre));
+    }
   }
 
   @override
@@ -202,6 +208,25 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Linha de placeholders com shimmer — usada no lugar do loading padrão
+  // (que estava aparecendo como um spinner grande e quebrado na Home).
+  Widget _skeletonRow(double itemWidth, double itemHeight, {int count = 4}) {
+    return SizedBox(
+      height: itemHeight + 46,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: count,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (_, __) => _ShimmerBox(
+          width: itemWidth,
+          height: itemHeight,
+          borderRadius: AppRadii.cardLarge,
+        ),
+      ),
+    );
+  }
+
   Widget _buildSuggestedPlaylists(
     BuildContext context,
     double playlistHeight, {
@@ -222,10 +247,24 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    return AsyncLoader<List<dynamic>>(
+    return FutureBuilder<List<dynamic>>(
       future: _suggestedPlaylistsFuture,
-      builder: (context, playlists) =>
-          _buildSuggestedPlaylistsSection(context, playlistHeight, playlists),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle(context, context.l10n!.suggestedPlaylists),
+              _skeletonRow(playlistHeight * 0.78, playlistHeight * 0.78),
+            ],
+          );
+        }
+        return _buildSuggestedPlaylistsSection(
+          context,
+          playlistHeight,
+          snapshot.data ?? [],
+        );
+      },
     );
   }
 
@@ -299,9 +338,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildRecommendedSongsSection(BuildContext context) {
-    return AsyncLoader<List<dynamic>>(
+    return FutureBuilder<List<dynamic>>(
       future: _recommendedSongsFuture,
-      builder: (context, data) {
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle(context, context.l10n!.recommendedForYou),
+              _skeletonRow(150 * 0.72, 150),
+            ],
+          );
+        }
+        final data = snapshot.data ?? [];
         if (data.isEmpty) return const SizedBox.shrink();
         return _buildRecommendedForYouSection(context, data);
       },
@@ -495,17 +544,35 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ---------------------------------------------------------------------
-  // Ritmos do Mundo — MESMO estilo visual do "Recommended for you": cards
-  // com a capa da playlist do gênero, gradiente escuro e nome sobreposto
-  // embaixo. Tocar num card abre a playlist (mesma rota já usada em toda
-  // a Home: context.push('/home/playlist/...')).
+  // Ritmos do Mundo — cards decorativos (gradiente + ícone, SEM depender
+  // de capa de playlist — foi buscar capa pelo gênero que trouxe a
+  // playlist errada). Tocar num card já TOCA músicas de verdade
+  // (fetchSongsList), sem navegar pra playlist nenhuma.
   // ---------------------------------------------------------------------
+  static const List<List<Color>> _genreGradients = [
+    [Color(0xFFDC2626), Color(0xFF7F1D1D)],
+    [Color(0xFF1F2937), Color(0xFF111827)],
+    [Color(0xFFB91C1C), Color(0xFF450A0A)],
+    [Color(0xFF374151), Color(0xFF111827)],
+  ];
+
   Widget _buildWorldRhythmsSection(BuildContext context) {
     const cardSize = 150.0;
 
-    return AsyncLoader<List<Map<String, dynamic>>>(
+    return FutureBuilder<List<Map<String, dynamic>>>(
       future: _worldRhythmsFuture,
-      builder: (context, entries) {
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _sectionTitle(context, 'Ritmos do Mundo'),
+              _skeletonRow(cardSize * 0.72, cardSize),
+            ],
+          );
+        }
+
+        final entries = snapshot.data ?? [];
         if (entries.isEmpty) return const SizedBox.shrink();
 
         return Column(
@@ -521,54 +588,62 @@ class _HomePageState extends State<HomePage> {
                 itemBuilder: (context, index) {
                   final entry = entries[index];
                   final genre = entry['genre'] as String;
-                  final playlist = entry['playlist'] as Map<String, dynamic>?;
+                  final songs = entry['songs'] as List<dynamic>;
+                  final gradient =
+                      _genreGradients[index % _genreGradients.length];
+                  final isLoading = _loadingGenres.contains(genre);
 
                   return GestureDetector(
-                    onTap: playlist == null
+                    onTap: songs.isEmpty
                         ? null
-                        : () => context.push(
-                            '/home/playlist/${playlist['ytid']}',
-                          ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(AppRadii.cardLarge),
-                      child: SizedBox(
-                        width: cardSize * 0.72,
-                        height: cardSize,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            if (playlist != null)
-                              PlaylistCube(playlist, size: cardSize)
-                            else
-                              Container(color: AppColors.accentSoft),
-                            IgnorePointer(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.topCenter,
-                                    end: Alignment.bottomCenter,
-                                    colors: [
-                                      Colors.transparent,
-                                      Colors.black.withValues(alpha: 0.75),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                            Positioned(
-                              left: 10,
-                              right: 10,
-                              bottom: 10,
-                              child: Text(
-                                genre,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(color: Colors.white),
-                              ),
-                            ),
-                          ],
+                        : () => _playGenreSongs(genre, songs),
+                    child: Container(
+                      width: cardSize * 0.72,
+                      height: cardSize,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                          AppRadii.cardLarge,
                         ),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: gradient,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.16),
+                              shape: BoxShape.circle,
+                            ),
+                            child: isLoading
+                                ? const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Icon(
+                                    FluentIcons.music_note_2_24_filled,
+                                    color: Colors.white,
+                                    size: 18,
+                                  ),
+                          ),
+                          Text(
+                            genre,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(color: Colors.white),
+                          ),
+                        ],
                       ),
                     ),
                   );
@@ -576,6 +651,67 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+/// Placeholder com efeito shimmer (sem depender de pacote externo) —
+/// substitui o spinner grande/quebrado do loading anterior.
+class _ShimmerBox extends StatefulWidget {
+  const _ShimmerBox({
+    required this.width,
+    required this.height,
+    this.borderRadius = AppRadii.card,
+  });
+
+  final double width;
+  final double height;
+  final double borderRadius;
+
+  @override
+  State<_ShimmerBox> createState() => _ShimmerBoxState();
+}
+
+class _ShimmerBoxState extends State<_ShimmerBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(widget.borderRadius),
+          child: SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment(-1 + 3 * t, 0),
+                  end: Alignment(3 * t, 0),
+                  colors: const [
+                    AppColors.divider,
+                    Color(0xFFF3F4F6),
+                    AppColors.divider,
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
       },
     );
