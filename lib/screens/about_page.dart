@@ -19,12 +19,17 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
-import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+// lib/screens/about_page.dart (ou caminho equivalente no seu fork)
+//
+// Nome do app trocado para "Spotifly" (fonte Inter, no lugar de paytoneOne),
+// e removido o card com o nome/link "Valeri Gokadze" + botoes de GitHub/site.
+// Nada de navegacao ou logica foi alterado.
+
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/constants/version.dart';
 import 'package:musify/extensions/l10n.dart';
-import 'package:musify/utilities/url_launcher.dart';
 import 'package:musify/widgets/mini_player_bottom_space.dart';
 
 class AboutPage extends StatelessWidget {
@@ -44,13 +49,12 @@ class AboutPage extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'Musify',
-                    style: TextStyle(
+                    'Spotifly',
+                    style: GoogleFonts.inter(
                       color: Theme.of(context).colorScheme.primary,
                       fontSize: 36,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'paytoneOne',
-                      letterSpacing: -1.2,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -1.0,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -88,114 +92,8 @@ class AboutPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 32),
-            Material(
-              color: Theme.of(context).colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(20),
-              clipBehavior: Clip.antiAlias,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Row(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: Image.network(
-                        'https://avatars.githubusercontent.com/u/79704324?v=4',
-                        width: 52,
-                        height: 52,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Valeri Gokadze',
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurface,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'WEB & APP Developer',
-                            style: TextStyle(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _SocialButton(
-                          icon: FluentIcons.code_24_filled,
-                          tooltip: 'Github',
-                          onPressed: () {
-                            launchURL(Uri.parse('https://github.com/gokadzev'));
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        _SocialButton(
-                          icon: FluentIcons.globe_24_filled,
-                          tooltip: 'Website',
-                          onPressed: () {
-                            launchURL(Uri.parse('https://gokadzev.github.io'));
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
             const MiniPlayerBottomSpace(),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SocialButton extends StatelessWidget {
-  const _SocialButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Material(
-      color: colorScheme.primaryContainer,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        onTap: onPressed,
-        borderRadius: BorderRadius.circular(12),
-        child: Tooltip(
-          message: tooltip,
-          child: Container(
-            width: 40,
-            height: 40,
-            alignment: Alignment.center,
-            child: Icon(icon, size: 20, color: colorScheme.primary),
-          ),
         ),
       ),
     );
