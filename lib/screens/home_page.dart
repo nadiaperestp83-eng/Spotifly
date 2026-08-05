@@ -20,8 +20,7 @@
  */
 
 // lib/screens/home_page.dart
-// Se o caminho real do arquivo no seu fork for diferente de
-// lib/screens/home_page.dart, apenas salve neste mesmo caminho existente.
+
 
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
@@ -549,13 +548,6 @@ class _HomePageState extends State<HomePage> {
   // playlist errada). Tocar num card já TOCA músicas de verdade
   // (fetchSongsList), sem navegar pra playlist nenhuma.
   // ---------------------------------------------------------------------
-  static const List<List<Color>> _genreGradients = [
-    [Color(0xFFDC2626), Color(0xFF7F1D1D)],
-    [Color(0xFF1F2937), Color(0xFF111827)],
-    [Color(0xFFB91C1C), Color(0xFF450A0A)],
-    [Color(0xFF374151), Color(0xFF111827)],
-  ];
-
   Widget _buildWorldRhythmsSection(BuildContext context) {
     const cardSize = 150.0;
 
@@ -567,7 +559,7 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _sectionTitle(context, 'Ritmos do Mundo'),
-              _skeletonRow(cardSize * 0.72, cardSize),
+              _skeletonRow(cardSize, cardSize),
             ],
           );
         }
@@ -580,68 +572,87 @@ class _HomePageState extends State<HomePage> {
           children: [
             _sectionTitle(context, 'Ritmos do Mundo'),
             SizedBox(
-              height: cardSize,
+              height: cardSize + 46,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: entries.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
                 itemBuilder: (context, index) {
                   final entry = entries[index];
                   final genre = entry['genre'] as String;
                   final songs = entry['songs'] as List<dynamic>;
-                  final gradient =
-                      _genreGradients[index % _genreGradients.length];
                   final isLoading = _loadingGenres.contains(genre);
 
+                  if (songs.isEmpty) return const SizedBox.shrink();
+
+                  // Card representa a MÚSICA de verdade encontrada pro
+                  // ritmo — capa, título e artista, igual a qualquer outro
+                  // card de música da Home (Suggested playlists /
+                  // Recommended for you). Tocar toca essa música (e o
+                  // resto do resultado do gênero na fila).
+                  final song = Map<String, dynamic>.from(songs.first);
+                  final title = (song['title'] ?? genre).toString();
+                  final artist = (song['artist'] ?? '').toString();
+                  final artworkUrl = (song['image'] ?? song['lowResImage'] ?? '')
+                      .toString();
+
                   return GestureDetector(
-                    onTap: songs.isEmpty
-                        ? null
-                        : () => _playGenreSongs(genre, songs),
-                    child: Container(
-                      width: cardSize * 0.72,
-                      height: cardSize,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(
-                          AppRadii.cardLarge,
-                        ),
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: gradient,
-                        ),
-                      ),
+                    onTap: () => _playGenreSongs(genre, songs),
+                    child: SizedBox(
+                      width: cardSize,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.16),
-                              shape: BoxShape.circle,
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                              AppRadii.cardLarge,
                             ),
-                            child: isLoading
-                                ? const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
+                            child: SizedBox(
+                              width: cardSize,
+                              height: cardSize,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  if (artworkUrl.isNotEmpty)
+                                    Image.network(
+                                      artworkUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                          _artworkFallback(),
+                                    )
+                                  else
+                                    _artworkFallback(),
+                                  if (isLoading)
+                                    Container(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.35,
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                          color: Colors.white,
+                                        ),
+                                      ),
                                     ),
-                                  )
-                                : const Icon(
-                                    FluentIcons.music_note_2_24_filled,
-                                    color: Colors.white,
-                                    size: 18,
-                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium,
                           ),
                           Text(
-                            genre,
-                            maxLines: 2,
+                            artist.isNotEmpty ? artist : genre,
+                            maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(color: Colors.white),
+                            style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ],
                       ),
@@ -653,6 +664,18 @@ class _HomePageState extends State<HomePage> {
           ],
         );
       },
+    );
+  }
+
+  Widget _artworkFallback() {
+    return Container(
+      color: AppColors.accentSoft,
+      alignment: Alignment.center,
+      child: const Icon(
+        FluentIcons.music_note_2_24_filled,
+        color: AppColors.accent,
+        size: 28,
+      ),
     );
   }
 }
