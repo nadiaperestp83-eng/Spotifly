@@ -20,10 +20,7 @@
  */
 
 // lib/screens/about_page.dart (ou caminho equivalente no seu fork)
-//
-// Nome do app trocado para "Spotifly" (fonte Inter, no lugar de paytoneOne),
-// e removido o card com o nome/link "Valeri Gokadze" + botoes de GitHub/site.
-// Nada de navegacao ou logica foi alterado.
+
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
