@@ -19,6 +19,9 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+// lib/widgets/custom_bar.dart
+
+
 import 'package:flutter/material.dart';
 
 class CustomBar extends StatelessWidget {
@@ -31,6 +34,7 @@ class CustomBar extends StatelessWidget {
     this.trailing,
     this.backgroundColor,
     this.iconColor,
+    this.iconBackgroundColor,
     this.textColor,
     this.borderRadius = BorderRadius.zero,
     super.key,
@@ -44,13 +48,17 @@ class CustomBar extends StatelessWidget {
   final Widget? trailing;
   final Color? backgroundColor;
   final Color? iconColor;
+  final Color? iconBackgroundColor;
   final Color? textColor;
   final BorderRadius borderRadius;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final effectiveIconColor = iconColor ?? colorScheme.onSecondaryContainer;
+    // Fundo do icone: vermelho solido (colorScheme.primary), nao mais o
+    // container palido. Icone branco (onPrimary) por cima.
+    final effectiveIconBg = iconBackgroundColor ?? colorScheme.primary;
+    final effectiveIconColor = iconColor ?? colorScheme.onPrimary;
 
     return Material(
       color: backgroundColor ?? colorScheme.surfaceContainerLow,
@@ -67,8 +75,8 @@ class CustomBar extends StatelessWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(12),
+                  color: effectiveIconBg,
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(tileIcon, size: 26, color: effectiveIconColor),
               ),
