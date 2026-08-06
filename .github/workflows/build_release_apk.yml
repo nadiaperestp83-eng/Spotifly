@@ -56,9 +56,11 @@ jobs:
           fi
           echo "applicationId/namespace atual: $OLD_APP_ID -> $NEW_APPLICATION_ID"
 
-          # 4. Troca applicationId e namespace no build.gradle
-          sed -i "s/applicationId[[:space:]]*=\?[[:space:]]*\"$OLD_APP_ID\"/applicationId \"$NEW_APPLICATION_ID\"/" "$GRADLE_FILE"
-          sed -i "s/namespace[[:space:]]*=\?[[:space:]]*\"$OLD_APP_ID\"/namespace \"$NEW_APPLICATION_ID\"/" "$GRADLE_FILE"
+          # 4. Troca applicationId e namespace no build.gradle. Sempre emite
+          # com "=" (funciona tanto em Kotlin DSL, que EXIGE "=", quanto em
+          # Groovy, onde "nome = valor" também é sintaxe válida).
+          sed -i "s/applicationId[[:space:]]*=\?[[:space:]]*\"$OLD_APP_ID\"/applicationId = \"$NEW_APPLICATION_ID\"/" "$GRADLE_FILE"
+          sed -i "s/namespace[[:space:]]*=\?[[:space:]]*\"$OLD_APP_ID\"/namespace = \"$NEW_APPLICATION_ID\"/" "$GRADLE_FILE"
 
           # 5. AndroidManifest.xml (caso tenha atributo package= explicito)
           find android/app/src -name "AndroidManifest.xml" -print0 | \
