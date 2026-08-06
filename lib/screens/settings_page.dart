@@ -34,7 +34,6 @@ import 'package:musify/services/playlist_download_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
-import 'package:musify/services/update_manager.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_bottom_sheet.dart';
 import 'package:musify/utilities/flutter_toast.dart';
@@ -369,6 +368,7 @@ class SettingsPage extends StatelessWidget {
         CustomBar(
           context.l10n!.restoreUserData,
           FluentIcons.cloud_add_24_filled,
+          borderRadius: commonCustomBarRadiusLast,
           onTap: () async {
             try {
               final result = await restoreData(context);
@@ -411,13 +411,6 @@ class SettingsPage extends StatelessWidget {
             }
           },
         ),
-        if (!isFdroidBuild)
-          CustomBar(
-            context.l10n!.downloadAppUpdate,
-            FluentIcons.arrow_download_24_filled,
-            borderRadius: commonCustomBarRadiusLast,
-            onTap: checkAppUpdates,
-          ),
       ],
     );
   }
