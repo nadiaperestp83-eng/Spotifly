@@ -39,7 +39,13 @@ jobs:
           keytool -genkey -v -keystore /home/runner/.config/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
       - name: Build release APK
-        run: flutter build apk --release --flavor github --no-tree-shake-icons
+        env:
+          LISTEN_NOTES_API_KEY: ${{ secrets.LISTEN_NOTES_API_KEY }}
+        run: |
+          flutter build apk --release \
+            --flavor github \
+            --no-tree-shake-icons \
+            --dart-define=LISTEN_NOTES_API_KEY="$LISTEN_NOTES_API_KEY"
 
       - name: Set release tag
         id: tag
