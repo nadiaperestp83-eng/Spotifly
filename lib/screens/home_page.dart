@@ -25,11 +25,12 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:musify/API/internet_archive_stories.dart';
+import 'package:musify/API/listen_notes.dart';
 import 'package:musify/constants/app_constants.dart';
 import 'package:musify/extensions/l10n.dart';
 import 'package:musify/main.dart';
 import 'package:musify/services/common_services.dart';
-import 'package:musify/services/data_manager.dart';
 import 'package:musify/services/listening_stats_service.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/settings_manager.dart';
@@ -55,17 +56,17 @@ class _HomePageState extends State<HomePage> {
 
   // ---------- Seção "Ritmos do Mundo" ----------
   // Lista EXATA passada pelo usuário — nada além disso.
-  static const List<String> _worldGenres = [
-    'Árabe',
-    'Flamenco',
-    'Cigana',
-    'Francesa',
-    'Italiana',
-    'Polca Paraguaia',
-    'Fado',
+  // "Histórias e Poesia" — storytelling + poesia, Listen Notes como fonte
+  // principal, Internet Archive como fallback se o Listen Notes não
+  // devolver nada (sem chave configurada, erro, ou timeout).
+  static const List<String> _storyQueries = [
+    'contos e histórias',
+    'poesia declamada',
+    'audiolivro conto',
+    'crônica narrada',
   ];
-  late final Future<List<Map<String, dynamic>>> _worldRhythmsFuture;
-  final Set<String> _loadingGenres = {};
+  late final Future<List<Map<String, dynamic>>> _storiesAndPoetryFuture;
+  final Set<String> _loadingEpisodes = {};
 
   @override
   void initState() {
@@ -74,34 +75,66 @@ class _HomePageState extends State<HomePage> {
       playlistsNum: recommendedCubesNumber,
     );
     _recommendedSongsFuture = getRecommendedSongs();
-    _worldRhythmsFuture = _loadWorldRhythms();
+    _storiesAndPoetryFuture = _loadStoriesAndPoetry();
     externalRecommendations.addListener(_refreshRecommendedSongs);
   }
 
-  // Busca MÚSICAS de verdade por gênero (não playlists — buscar playlist
-  // pelo nome cru do gênero foi o que puxou "Fale Árabe", uma playlist de
-  // aula de idioma, em vez de música árabe). fetchSongsList é a mesma
-  // função de busca de músicas usada na Search page; "música" no final da
-  // query ajuda a evitar conteúdo falado/podcast/aula.
-  Future<List<Map<String, dynamic>>> _loadWorldRhythms() async {
-    final results = await Future.wait(
-      _worldGenres.map((genre) => fetchSongsList('$genre música')),
+  Future<List<Map<String, dynamic>>> _loadStoriesAndPoetry() async {
+    // 1) Tenta Listen Notes primeiro, em paralelo pros termos de busca.
+    final listenNotesResults = await Future.wait(
+      _storyQueries.map((q) => fetchListenNotesEpisodes(q, pageSize: 5)),
     );
-    return List.generate(_worldGenres.length, (i) {
-      return {'genre': _worldGenres[i], 'songs': List<dynamic>.from(results[i])};
-    });
+    var episodes = listenNotesResults.expand((e) => e).toList();
+
+    // 2) Se Listen Notes não trouxe nada (sem chave, erro, timeout),
+    // cai pro Internet Archive.
+    if (episodes.isEmpty) {
+      final archiveResults = await Future.wait(
+        _storyQueries.map((q) => fetchInternetArchiveStories(q, rows: 5)),
+      );
+      episodes = archiveResults.expand((e) => e).toList();
+    }
+
+    // Remove duplicados por id e limita a 12 cards.
+    final seenIds = <String>{};
+    final unique = <Map<String, dynamic>>[];
+    for (final episode in episodes) {
+      final id = episode['id'].toString();
+      if (seenIds.add(id)) unique.add(episode);
+    }
+    return unique.take(12).toList();
   }
 
-  Future<void> _playGenreSongs(String genre, List<dynamic> songs) async {
-    if (_loadingGenres.contains(genre) || songs.isEmpty) return;
-    setState(() => _loadingGenres.add(genre));
+  Future<void> _playEpisode(
+    Map<String, dynamic> episode,
+    List<Map<String, dynamic>> queue,
+  ) async {
+    final id = episode['id'].toString();
+    if (_loadingEpisodes.contains(id)) return;
+    setState(() => _loadingEpisodes.add(id));
     try {
+      final index = queue.indexWhere((e) => e['id'].toString() == id);
       await audioHandler.playPlaylistSong(
-        playlist: {'title': 'Ritmos do Mundo · $genre', 'list': songs},
-        songIndex: 0,
+        playlist: {
+          'title': 'Histórias e Poesia',
+          'list': queue
+              .map(
+                (e) => {
+                  'title': e['title'],
+                  'artist': e['author'],
+                  'image': e['image'],
+                  // ⚠️ Episódio externo (Listen Notes/Internet Archive),
+                  // não uma música do YouTube — ver observação no chat.
+                  'audioUrl': e['audioUrl'],
+                  'duration': e['durationSec'],
+                },
+              )
+              .toList(),
+        },
+        songIndex: index < 0 ? 0 : index,
       );
     } finally {
-      if (mounted) setState(() => _loadingGenres.remove(genre));
+      if (mounted) setState(() => _loadingEpisodes.remove(id));
     }
   }
 
@@ -182,7 +215,7 @@ class _HomePageState extends State<HomePage> {
               ),
               _buildCurrentMonthRecapSection(context),
               _buildRecommendedSongsSection(context),
-              _buildWorldRhythmsSection(context),
+              _buildStoriesAndPoetrySection(context),
               const MiniPlayerBottomSpace(),
             ],
           ),
@@ -543,61 +576,52 @@ class _HomePageState extends State<HomePage> {
   }
 
   // ---------------------------------------------------------------------
-  // Ritmos do Mundo — cards decorativos (gradiente + ícone, SEM depender
-  // de capa de playlist — foi buscar capa pelo gênero que trouxe a
-  // playlist errada). Tocar num card já TOCA músicas de verdade
-  // (fetchSongsList), sem navegar pra playlist nenhuma.
+  // Histórias e Poesia — carrossel de episódios reais (Listen Notes,
+  // fallback Internet Archive), cada card com capa + título + autor,
+  // igual ao padrão de Suggested Playlists / Recommended for you.
+  // Regra de ouro: todo episódio já vem filtrado para ≤10 minutos
+  // (aplicado dentro de listen_notes.dart / internet_archive_stories.dart).
   // ---------------------------------------------------------------------
-  Widget _buildWorldRhythmsSection(BuildContext context) {
+  Widget _buildStoriesAndPoetrySection(BuildContext context) {
     const cardSize = 150.0;
 
     return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _worldRhythmsFuture,
+      future: _storiesAndPoetryFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _sectionTitle(context, 'Ritmos do Mundo'),
+              _sectionTitle(context, 'Histórias e Poesia'),
               _skeletonRow(cardSize, cardSize),
             ],
           );
         }
 
-        final entries = snapshot.data ?? [];
-        if (entries.isEmpty) return const SizedBox.shrink();
+        final episodes = snapshot.data ?? [];
+        if (episodes.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _sectionTitle(context, 'Ritmos do Mundo'),
+            _sectionTitle(context, 'Histórias e Poesia'),
             SizedBox(
               height: cardSize + 46,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                itemCount: entries.length,
+                itemCount: episodes.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 14),
                 itemBuilder: (context, index) {
-                  final entry = entries[index];
-                  final genre = entry['genre'] as String;
-                  final songs = entry['songs'] as List<dynamic>;
-                  final isLoading = _loadingGenres.contains(genre);
+                  final episode = episodes[index];
+                  final id = episode['id'].toString();
+                  final isLoading = _loadingEpisodes.contains(id);
 
-                  if (songs.isEmpty) return const SizedBox.shrink();
-
-                  // Card representa a MÚSICA de verdade encontrada pro
-                  // ritmo — capa, título e artista, igual a qualquer outro
-                  // card de música da Home (Suggested playlists /
-                  // Recommended for you). Tocar toca essa música (e o
-                  // resto do resultado do gênero na fila).
-                  final song = Map<String, dynamic>.from(songs.first);
-                  final title = (song['title'] ?? genre).toString();
-                  final artist = (song['artist'] ?? '').toString();
-                  final artworkUrl = (song['image'] ?? song['lowResImage'] ?? '')
-                      .toString();
+                  final title = (episode['title'] ?? '').toString();
+                  final author = (episode['author'] ?? '').toString();
+                  final artworkUrl = (episode['image'] ?? '').toString();
 
                   return GestureDetector(
-                    onTap: () => _playGenreSongs(genre, songs),
+                    onTap: () => _playEpisode(episode, episodes),
                     child: SizedBox(
                       width: cardSize,
                       child: Column(
@@ -649,7 +673,7 @@ class _HomePageState extends State<HomePage> {
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           Text(
-                            artist.isNotEmpty ? artist : genre,
+                            author,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodyMedium,
