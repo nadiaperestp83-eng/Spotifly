@@ -17,6 +17,72 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Renomeia o pacote Dart (musify -> spotifly, em pubspec.yaml e em
+      # TODOS os imports package:musify/...) e o applicationId/namespace
+      # Android (detectado automaticamente no build.gradle, nao hardcoded
+      # -> com.spotifly.labs), incluindo mover a pasta do codigo nativo
+      # Kotlin/Java pra bater com o novo pacote. Roda a cada build; o
+      # repositorio em si continua com "musify" nos arquivos-fonte.
+      - name: Rename package (Dart + Android applicationId)
+        run: |
+          set -euo pipefail
+
+          OLD_DART_PACKAGE=$(grep '^name:' pubspec.yaml | awk '{print $2}')
+          NEW_DART_PACKAGE="spotifly"
+          NEW_APPLICATION_ID="com.spotifly.labs"
+
+          echo "Pacote Dart: $OLD_DART_PACKAGE -> $NEW_DART_PACKAGE"
+
+          # 1. pubspec.yaml
+          sed -i "s/^name: .*/name: $NEW_DART_PACKAGE/" pubspec.yaml
+
+          # 2. Todos os imports Dart do projeto (lib/, test/ etc.)
+          grep -rl "package:${OLD_DART_PACKAGE}/" --include="*.dart" . | \
+            xargs -r sed -i "s/package:${OLD_DART_PACKAGE}\//package:${NEW_DART_PACKAGE}\//g"
+
+          # 3. Detecta o applicationId/namespace ATUAL (nao assume o valor,
+          # le o que ja esta no build.gradle do fork).
+          GRADLE_FILE="android/app/build.gradle"
+          if [ ! -f "$GRADLE_FILE" ]; then
+            GRADLE_FILE="android/app/build.gradle.kts"
+          fi
+
+          OLD_APP_ID=$(grep -oE '(applicationId|namespace)[[:space:]]*=?[[:space:]]*"[a-zA-Z0-9.]+"' "$GRADLE_FILE" \
+            | head -n1 | grep -oE '"[a-zA-Z0-9.]+"' | tr -d '"')
+
+          if [ -z "$OLD_APP_ID" ]; then
+            echo "ERRO: nao consegui detectar applicationId/namespace atual em $GRADLE_FILE"
+            exit 1
+          fi
+          echo "applicationId/namespace atual: $OLD_APP_ID -> $NEW_APPLICATION_ID"
+
+          # 4. Troca applicationId e namespace no build.gradle
+          sed -i "s/applicationId[[:space:]]*=\?[[:space:]]*\"$OLD_APP_ID\"/applicationId \"$NEW_APPLICATION_ID\"/" "$GRADLE_FILE"
+          sed -i "s/namespace[[:space:]]*=\?[[:space:]]*\"$OLD_APP_ID\"/namespace \"$NEW_APPLICATION_ID\"/" "$GRADLE_FILE"
+
+          # 5. AndroidManifest.xml (caso tenha atributo package= explicito)
+          find android/app/src -name "AndroidManifest.xml" -print0 | \
+            xargs -0 -r sed -i "s/package=\"$OLD_APP_ID\"/package=\"$NEW_APPLICATION_ID\"/g"
+
+          # 6. Move o codigo nativo Kotlin/Java pra nova estrutura de pasta
+          # e atualiza a linha "package ..." dentro de cada arquivo movido.
+          OLD_PATH=$(echo "$OLD_APP_ID" | tr '.' '/')
+          NEW_PATH=$(echo "$NEW_APPLICATION_ID" | tr '.' '/')
+
+          for LANG_DIR in kotlin java; do
+            SRC_DIR="android/app/src/main/$LANG_DIR/$OLD_PATH"
+            if [ -d "$SRC_DIR" ]; then
+              DEST_DIR="android/app/src/main/$LANG_DIR/$NEW_PATH"
+              mkdir -p "$(dirname "$DEST_DIR")"
+              git mv "$SRC_DIR" "$DEST_DIR" 2>/dev/null || mv "$SRC_DIR" "$DEST_DIR"
+              find "$DEST_DIR" -type f \( -name "*.kt" -o -name "*.java" \) -print0 | \
+                xargs -0 -r sed -i "s/^package $OLD_APP_ID/package $NEW_APPLICATION_ID/"
+              echo "Codigo nativo movido: $SRC_DIR -> $DEST_DIR"
+            fi
+          done
+
+          echo "Renomeacao completa."
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -57,12 +123,12 @@ jobs:
           # Procura por qualquer APK de release gerado dentro da pasta de outputs do projeto
           APK_PATH=$(find build/app/outputs/ -name "*.apk" | grep -i "release" | head -n 1)
           echo "APK encontrado em: $APK_PATH"
-          cp "$APK_PATH" "release/musifly-${{ steps.tag.outputs.tag }}.apk"
+          cp "$APK_PATH" "release/spotifly-${{ steps.tag.outputs.tag }}.apk"
 
       - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
-          name: "Musifly ${{ steps.tag.outputs.tag }}"
+          name: "Spotifly ${{ steps.tag.outputs.tag }}"
           generate_release_notes: true
           files: release/*.apk
