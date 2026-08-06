@@ -19,6 +19,9 @@
  *     please visit: https://github.com/gokadzev/Musify
  */
 
+// lib/main.dart
+
+
 import 'dart:async';
 
 import 'package:app_links/app_links.dart';
@@ -41,7 +44,6 @@ import 'package:musify/services/playlist_sharing.dart';
 import 'package:musify/services/playlists_manager.dart';
 import 'package:musify/services/router_service.dart';
 import 'package:musify/services/settings_manager.dart';
-import 'package:musify/services/update_manager.dart';
 import 'package:musify/theme/app_themes.dart';
 import 'package:musify/utilities/flutter_toast.dart';
 import 'package:musify/utilities/language_utils.dart';
@@ -166,29 +168,15 @@ class _MusifyState extends State<Musify> with WidgetsBindingObserver {
       );
     }
 
+    // Popup "Check for Updates?" e checagem automática desativados: o
+    // Musify original apontava pro repositório errado (não é o seu fork).
+    // O anúncio/aviso da tela inicial (fetchAnnouncementOnly) continua
+    // funcionando normalmente — isso não é checagem de versão/update.
     if (!isFdroidBuild) {
-      if (shouldWeCheckUpdates.value == true) {
-        if (!isUpdateChecked && kReleaseMode) {
-          SchedulerBinding.instance.addPostFrameCallback((_) {
-            if (!offlineMode.value) {
-              checkAppUpdates();
-            }
-            isUpdateChecked = true;
-          });
-        }
-      } else {
-        if (shouldWeCheckUpdates.value == null) {
-          // show dialog that asks user if they want to enable update checks
-          SchedulerBinding.instance.addPostFrameCallback((_) {
-            showUpdateCheckDialog(NavigationManager().context);
-          });
-        } else {
-          SchedulerBinding.instance.addPostFrameCallback((_) async {
-            if (!offlineMode.value) {
-              await fetchAnnouncementOnly();
-            }
-          });
-        }
+      if (!offlineMode.value) {
+        SchedulerBinding.instance.addPostFrameCallback((_) async {
+          await fetchAnnouncementOnly();
+        });
       }
     }
   }
